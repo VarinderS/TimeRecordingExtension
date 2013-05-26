@@ -27,7 +27,7 @@ Tasks.bind = function() {
 
 function init(tab) {
 	Tasks.bind();
-	Tasks.get();
+	//Tasks.get();
 }
 
 
