@@ -101,6 +101,7 @@ db.getObjStore = function(storeName, mode) {
 }
 
 db.clearObjStore = function(storeName) {
+	console.log(db.objStore);
 	var store = db.getObjStore(db.objStore, "readwrite");
 	var req = store.clear();
 
@@ -147,9 +148,17 @@ db.handleError = function(e) {
 }
 
 
+
+
+
+
+
+
+
 function init(tab) {
+	db.open();
 	Tasks.bind();
-	Tasks.get();
+	//Tasks.get();
 }
 
 
