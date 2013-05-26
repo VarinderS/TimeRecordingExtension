@@ -14,10 +14,11 @@ Timer.start = function($taskItem) {
 
 	var start = new Date(),
 		tasktime = 0,
-		taskId = $taskItem.attr("id");
+		taskId = $taskItem.attr("id"),
+		estimatedMinutes = $taskItem.attr("data-estimatedMinutes");
 
 	$taskItem.addClass("active");
-	$taskItem.find(".time-btn").text("stop");
+	$taskItem.find(".time-btn").removeClass("icon-play").addClass("icon-pause");
 
 	$taskItem.attr("data-start", start);
 
@@ -27,14 +28,18 @@ Timer.start = function($taskItem) {
 		$taskItem.attr("data-tasktime", tasktime);
 	}
 
+
+
 	Intervals[taskId] = window.setInterval(function() {
 		var dif = Number(tasktime) + Math.floor((new Date().getTime() - start.getTime()) / 1000);
+		var mins = Timer.mins(dif);
 		$taskItem.attr("data-tasktime", dif);
-		$taskItem.attr("data-actualminutes", Timer.mins(dif));
+		$taskItem.attr("data-actualminutes", mins);
 		$taskItem.find(".time").text(Timer.hms(dif));
 
-		ls.setItem(taskId, dif);
+		Timer.updateProgress($taskItem, mins, estimatedMinutes);
 
+		ls.setItem(taskId, dif);
 	}, 500);
 }
 
@@ -43,7 +48,7 @@ Timer.stop = function($taskItem) {
 	window.clearInterval(Intervals[taskId]);
 
 	$taskItem.removeClass("active");
-	$taskItem.find(".time-btn").text("start");
+	$taskItem.find(".time-btn").addClass("icon-play").removeClass("icon-pause");
 
 	var actualtime = Timer.mins($taskItem.attr("data-tasktime"));
 	$taskItem.attr("data-actualtime", actualtime);
@@ -69,6 +74,37 @@ Timer.mins = function(secs) {
 	return Math.ceil(secs/60);
 }
 
+Timer.getProgress = function(timeSpent, timeAllowed) {
+	return timeSpent * 100 / timeAllowed;
+}
+
+Timer.getProgressState = function(timeSpent, timeAllowed) {
+	var percent = Timer.getProgress(timeSpent, timeAllowed);
+
+	if (percent < 25) {
+		return "perfect";
+	} else if (percent > 24 && percent < 50) {
+		return "good";
+	} else if (percent > 49 && percent < 75) {
+		return "okay";
+	} else {
+		return "stuffedup";
+	}
+}
+
+Timer.updateProgress = function($elem, timeSpent, timeAllowed) {
+
+	if (timeAllowed && timeAllowed > 0) {
+
+		var $progress = $elem.find(".progress-bar");
+		var progressState = Timer.getProgressState(timeSpent, timeAllowed);
+		var width = "width:" + Timer.getProgress(timeSpent, timeAllowed) + "%";
+
+		$progress.removeClass(progressState).addClass(progressState);
+
+		$progress.find(".progress").attr("style", width);
+	}
+}
 
 Tasks.get = function() {
 	$.ajax({
@@ -135,13 +171,14 @@ Tasks.get = function() {
 				$markup = $("<li></li>");
 
 			if ($this.find("Assigned").length > 0) {
-				var taskName = $this.children("Name").text(),
-					id = $this.children("ID").text(),
-					taskId = "task-" + id,
-					jobId = $this.closest("Job").children("ID").text(),
-					actualMinutes = $this.children("ActualMinutes").text(),
-					time = 0,
-					taskDescription = $this.find("Description").text();
+				var taskName 			= $this.children("Name").text(),
+					id 					= $this.children("ID").text(),
+					taskId 				= "task-" + id,
+					jobId 				= $this.closest("Job").children("ID").text(),
+					estimatedMinutes 	= $this.children("EstimatedMinutes").text(),
+					actualMinutes 		= $this.children("ActualMinutes").text(),
+					time 				= 0,
+					taskDescription 	= $this.find("Description").text();
 
 
 				if (ls.getItem(taskId)) {
@@ -174,11 +211,46 @@ Tasks.get = function() {
 				$markup.attr("data-jobId", jobId);
 				$markup.attr("data-savedTime", actualMinutes);
 
+				/*	
+					<h3>Database development - Task Label 1</h3>
+					<p>Very useful info for Task: Database development</p>
+					<p class="progress-bar perfect">
+						<span class="progress"></span>
+					</p>
+					<p class="timer-row">
+						<span class="time">8:03:08</span>
+						<span class="task-actions">
+							<a href="#" class="time-btn icon-play"></a>
+							<a href="#" class="submit-time icon-checkmark-circle"></a>
+						</span>
+					</p>
+				*/
 				
-				$markup.append("<p class='time-row'><span class='time'>" + Timer.hms(time) + "</span><a href='#'' class='time-btn'>start</a></p>");
-				$markup.append("<p>" + taskName + "</p>");
+				$markup.append("<h3>" + taskName + "</h3>");
 				$markup.append("<p>" + taskDescription + "</p>");
-				$markup.append("<p><a href='#' class='submit-time'>Submit</a></p>");
+
+				if (estimatedMinutes !="0") {
+					$markup.attr("data-estimatedMinutes", estimatedMinutes);
+					var progressBar = [
+							"<p class='progress-bar "+ Timer.getProgressState(actualMinutes, estimatedMinutes) +"'>",
+								"<span class='progress' style='width:"+ Timer.getProgress(actualMinutes, estimatedMinutes) +"%'></span>",
+							"</p>"
+						].join("");
+					$markup.append(progressBar);
+				}
+
+
+				var timerRow = [
+						"<p class='timer-row'>",
+							"<span class='time'>"+ Timer.hms(time) +"</span>",
+							"<span class='task-actions'>",
+								"<a href='#' class='time-btn icon-play'></a>",
+								"<a href='#' class='submit-time icon-checkmark-circle'></a>",
+							"</span>",
+						"</p>"
+					].join("");
+
+				$markup.append(timerRow);
 
 				$tasks.append($markup);
 			}
@@ -225,7 +297,15 @@ Tasks.submit = function($task) {
 		cache: false,
 		error: function() { console.log("something went wrong"); },
 		success: function(xml) {
+			var $xml = $(xml),
+				minutes = $xml.find("Minutes").text(),
+				taskId = $xml.find("Task").children("ID").text(),
+				$task = $("#task-" + taskId),
+				savedTime = Number($task.attr("data-savedtime")) + Number(minutes);
+
+			$task.attr("data-savedtime", savedTime);
 			console.log("it works");
+			console.log(xml);
 		}
 	});	
 }

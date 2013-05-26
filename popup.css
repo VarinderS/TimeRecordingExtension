@@ -60,7 +60,7 @@ h3 {
 
 #tasks {
 	width:400px;
-	height:425px;
+	max-height:425px;
 	overflow:auto;
 	background:white;
 	padding:15px 0;
@@ -112,6 +112,10 @@ h3 {
 .task-actions a {
 	color:#262626;
 	font-size:18px;
+	display:inline-block;
+}
+.task-actions .time-btn {
+	margin-right:10px;
 }
 .task-actions .submit-time {
 	-webkit-transition: .3s ease;
