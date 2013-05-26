@@ -1,0 +1,16 @@
+{
+  "manifest_version": 2,
+
+  "name": "Time Recording",
+  "description": "Records time from Workflow max",
+  "version": "1.0",
+
+  "browser_action": {
+    "default_icon": "icon.png",
+    "default_popup": "popup.html"
+  },
+
+  "permissions": [
+    "*://*/*"
+  ]
+}
