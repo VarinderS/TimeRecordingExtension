@@ -121,7 +121,8 @@ h3 {
 	-webkit-transition: .3s ease;
 	transition: .3s ease;
 }
-li.active .submit-time {
+li.active .submit-time,
+li.syncd .submit-time {
 	color:#e1e1e1;
 	cursor:default;
 }

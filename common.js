@@ -11,49 +11,95 @@ var Tasks = {};
 
 
 Timer.start = function($taskItem) {
-
-	var start = new Date(),
-		tasktime = 0,
-		taskId = $taskItem.attr("id"),
-		estimatedMinutes = $taskItem.attr("data-estimatedMinutes");
-
 	$taskItem.addClass("active");
 	$taskItem.find(".time-btn").removeClass("icon-play").addClass("icon-pause");
 
-	$taskItem.attr("data-start", start);
+	var taskId = $taskItem.attr("data-taskid");
+	var intervalsTaskId = $taskItem.attr("id");
+	var store = db.getObjStore(db.objStore, "readwrite");
 
-	if ($taskItem.attr("data-tasktime")) {
-		tasktime = $taskItem.attr("data-tasktime");
-	} else {
-		$taskItem.attr("data-tasktime", tasktime);
+
+	req = store.get(taskId);
+
+	req.onerror = db.handleError;
+
+	req.onsuccess = function(e) {
+		var row = req.result;
+
+		row.Running 	= "true";
+		row.Syncd 		= "false";
+		row.StartDate 	= new Date();
+
+		req = store.put(row);
+
+		req.onerror = db.handleError;
+		
+		req.onsuccess = function(e) {
+			console.log("actual minutes ", row.ActualMinutes*60);
+			var start = row.StartDate;
+			var tasktime = row.ActualMinutes*60; //secs
+			var estimatedMinutes = row.EstimatedMinutes;
+			
+
+			Intervals[intervalsTaskId] = window.setInterval(function() {
+				var dif = Number(tasktime) + Math.floor((new Date().getTime() - start.getTime()) / 1000);
+				$taskItem.find(".time").text(Timer.hms(dif));
+
+				Timer.updateProgress($taskItem, Timer.mins(dif), estimatedMinutes); // could've been better
+
+			}, 500);
+		}
+
+
 	}
 
-
-
-	Intervals[taskId] = window.setInterval(function() {
-		var dif = Number(tasktime) + Math.floor((new Date().getTime() - start.getTime()) / 1000);
-		var mins = Timer.mins(dif);
-		$taskItem.attr("data-tasktime", dif);
-		$taskItem.attr("data-actualminutes", mins);
-		$taskItem.find(".time").text(Timer.hms(dif));
-
-		Timer.updateProgress($taskItem, mins, estimatedMinutes);
-
-		ls.setItem(taskId, dif);
-	}, 500);
 }
 
 Timer.stop = function($taskItem) {
-	var taskId = $taskItem.attr("id");
-	window.clearInterval(Intervals[taskId]);
 
 	$taskItem.removeClass("active");
-	$taskItem.find(".time-btn").addClass("icon-play").removeClass("icon-pause");
+	$taskItem.find(".time-btn").removeClass("icon-pause").addClass("icon-play");
 
-	var actualtime = Timer.mins($taskItem.attr("data-tasktime"));
-	$taskItem.attr("data-actualtime", actualtime);
+	var taskId = $taskItem.attr("data-taskid");
+	var intervalsTaskId = $taskItem.attr("id");
+	var store = db.getObjStore(db.objStore, "readwrite");
 
-	ls.setItem(taskId, $taskItem.attr("data-tasktime"));
+	window.clearInterval(Intervals[intervalsTaskId]);
+
+	req = store.get(taskId);
+
+	req.onerror = db.handleError;
+
+	req.onsuccess = function(e) {
+		var row = req.result;
+
+		
+
+		var start = row.StartDate; // should be the one updated by timer.start -otherwise you're stuffed.
+		var estimatedMinutes = row.EstimatedMinutes;
+		var savedMinutes = row.SavedTime;
+		var tasktime = row.ActualMinutes*60; //secs
+
+		var dif = Number(tasktime) + Math.floor((new Date().getTime() - start.getTime()) / 1000);
+		var actualMinutes = Timer.mins(dif);
+
+		$taskItem.find(".time").text(Timer.hms(dif));
+		Timer.updateProgress($taskItem, actualMinutes, estimatedMinutes); // could've been better
+
+
+		row.Running = "false";
+		if (actualMinutes > row.ActualMinutes) {
+			$taskItem.removeClass("syncd");
+		}
+		row.ActualMinutes = actualMinutes;
+
+		req = store.put(row);
+
+		req.onerror = db.handleError;
+		
+
+	}
+
 }
 
 
@@ -71,7 +117,7 @@ Timer.hms = function(secs) {
 }
 
 Timer.mins = function(secs) {
-	return Math.ceil(secs/60);
+	return Math.round(secs/60);
 }
 
 Timer.getProgress = function(timeSpent, timeAllowed) {
@@ -106,206 +152,93 @@ Timer.updateProgress = function($elem, timeSpent, timeAllowed) {
 	}
 }
 
-Tasks.get = function() {
-	$.ajax({
-		url: "http://api.workflowmax.com/job.api/staff/82807?apiKey="+ API_KEY +"&accountKey="+ ACCOUNT_KEY
-	}).done(function(data) {
-		var $xml = $(data),
-			$tasks = $("#tasks");
-			
-
-		/*
-			<Jobs>
-				<Job>
-					<ID>J000003</ID>
-					<Name>Job for Client 1</Name>
-					<Description></Description>
-					<Client>
-						<ID>2128616</ID>
-						<Name>Client 1</Name>
-					</Client>
-					<ClientOrderNumber></ClientOrderNumber>
-					<State>Planned</State>
-					<StartDate>2013-05-23T00:00:00</StartDate>
-					<DueDate>2013-05-31T00:00:00</DueDate>
-					<Contact>
-						<ID>1341398</ID>
-						<Name>Client 1 Contact Name</Name>
-					</Contact>
-					<InternalID>2254794</InternalID>
-					<Assigned>
-						<Staff>
-							<ID>82807</ID>
-							<Name>Varinder</Name>
-						</Staff>
-						<Staff>
-							<ID>82811</ID>
-							<Name>Staff member 1</Name>
-						</Staff>
-					</Assigned>	
-					<Tasks>
-						<Task>
-							<ID>8159098</ID>
-							<Name>Database development - Task Label 1</Name>
-							<TaskID>462048</TaskID>
-							<EstimatedMinutes>480</EstimatedMinutes>
-							<ActualMinutes>0</ActualMinutes>
-							<Description>Very useful info for Task: Database development</Description>
-							<Completed>false</Completed>
-							<Billable>true</Billable>
-							<Folder></Folder>
-							<Assigned>
-								<Staff>
-									<ID>82807</ID>
-									<Name>Varinder</Name>
-								</Staff>
-							</Assigned>
-						</Task>
-					</Tasks>
-				</Job>
-			</Jobs>
-		*/
-
-		$xml.find("Task").each(function() {
-			var $this = $(this),
-				$markup = $("<li></li>");
-
-			if ($this.find("Assigned").length > 0) {
-				var taskName 			= $this.children("Name").text(),
-					id 					= $this.children("ID").text(),
-					taskId 				= "task-" + id,
-					jobId 				= $this.closest("Job").children("ID").text(),
-					estimatedMinutes 	= $this.children("EstimatedMinutes").text(),
-					actualMinutes 		= $this.children("ActualMinutes").text(),
-					time 				= 0,
-					taskDescription 	= $this.find("Description").text();
 
 
-				if (ls.getItem(taskId)) {
-					var taskSecs = ls.getItem(taskId),
-						taskMinutes = taskSecs/60;
 
-					if (actualMinutes != "0" && actualMinutes > taskMinutes) {
-						taskSecs = actualMinutes*60;
-						taskMinutes = actualMinutes;
-						ls.setItem(taskId, taskSecs);
+Tasks.submit = function($taskItem) {
 
-						$markup.attr("data-actualminutes", actualMinutes);
-						$markup.attr("data-tasktime", taskSecs);
-					} else {
-						$markup.attr("data-actualminutes", taskMinutes);
-						$markup.attr("data-tasktime", taskSecs);
+	var taskId = $taskItem.attr("data-taskid");
+	var store = db.getObjStore(db.objStore, "readwrite");
+
+
+	req = store.get(taskId);
+
+	req.onerror = db.handleError;
+
+	req.onsuccess = function(e) {
+		var row = req.result;
+		//console.log(row);
+		var date = row.StartDate;
+
+		var dd = date.getDate();
+		var mm = date.getMonth()+1; //January is 0!
+
+		var yyyy = date.getFullYear();
+		if (dd<10) { dd = '0' + dd } 
+		if (mm<10) { mm = '0' + mm } 
+
+		date = yyyy + mm + dd;
+
+		console.log(row.ActualMinutes, row.SavedTime);
+		var timeSheetData = [
+
+			"<Timesheet>",
+				"<Job>"		+ row.JobId 			+ "</Job>",
+				"<Task>"	+ row.TaskId 			+ "</Task>",
+				"<Staff>"	+ USER_ID  				+ "</Staff>",
+				"<Date>"	+ date 					+ "</Date>",
+				"<Minutes>"	+ (Number(row.ActualMinutes) - Number(row.SavedTime)) 	+ "</Minutes>",
+				"<Note>This Entry was added via chrome extension.</Note>",
+			"</Timesheet>"
+
+		].join("");
+
+		console.log(timeSheetData);
+
+		$.ajax({ 
+			type: "POST",
+			url: "https://api.workflowmax.com/time.api/add?apiKey="+ API_KEY +"&accountKey="+ ACCOUNT_KEY,
+			data: timeSheetData,
+			dataType: "xml",
+			cache: false,
+			error: function() { console.log("something went wrong"); },
+			success: function(xml) {
+				var $xml = $(xml),
+					minutes = $xml.find("Minutes").text(),
+					taskId = $xml.find("Task").children("ID").text();
+
+				if ($xml.find("Status").text() != "ERROR") {
+					var store = db.getObjStore(db.objStore, "readwrite");
+
+					console.log(xml);
+					console.log(taskId);
+					req = store.get(taskId);
+
+					req.onerror = db.handleError;
+
+					req.onsuccess = function(e) {
+						var row = req.result;
+						console.log(row);
+						row.Syncd = "true";
+						row.SavedTime = Number(row.SavedTime) + Number(minutes);
+
+						req = store.put(row);
+						req.onerror = db.handleError;
+						req.onsuccess = function() {
+							$("#task-" + taskId).addClass("syncd");
+						}
 					}
-
-					time = taskSecs;
-
 				} else {
-					$markup.attr("data-actualminutes", actualMinutes);
-					ls.setItem(taskId, actualMinutes*60);
-
-					time = actualMinutes;
+					console.log("something went wrong");
 				}
-
-				$markup.attr("id", taskId);
-				$markup.attr("data-taskId", id);
-				$markup.attr("data-jobId", jobId);
-				$markup.attr("data-savedTime", actualMinutes);
-
-				/*	
-					<h3>Database development - Task Label 1</h3>
-					<p>Very useful info for Task: Database development</p>
-					<p class="progress-bar perfect">
-						<span class="progress"></span>
-					</p>
-					<p class="timer-row">
-						<span class="time">8:03:08</span>
-						<span class="task-actions">
-							<a href="#" class="time-btn icon-play"></a>
-							<a href="#" class="submit-time icon-checkmark-circle"></a>
-						</span>
-					</p>
-				*/
-				
-				$markup.append("<h3>" + taskName + "</h3>");
-				$markup.append("<p>" + taskDescription + "</p>");
-
-				if (estimatedMinutes !="0") {
-					$markup.attr("data-estimatedMinutes", estimatedMinutes);
-					var progressBar = [
-							"<p class='progress-bar "+ Timer.getProgressState(actualMinutes, estimatedMinutes) +"'>",
-								"<span class='progress' style='width:"+ Timer.getProgress(actualMinutes, estimatedMinutes) +"%'></span>",
-							"</p>"
-						].join("");
-					$markup.append(progressBar);
-				}
-
-
-				var timerRow = [
-						"<p class='timer-row'>",
-							"<span class='time'>"+ Timer.hms(time) +"</span>",
-							"<span class='task-actions'>",
-								"<a href='#' class='time-btn icon-play'></a>",
-								"<a href='#' class='submit-time icon-checkmark-circle'></a>",
-							"</span>",
-						"</p>"
-					].join("");
-
-				$markup.append(timerRow);
-
-				$tasks.append($markup);
 			}
 		});
-	});
-}
 
 
-Tasks.submit = function($task) {
-	var jobId 	= $task.attr("data-jobid"),
-		taskId 	= $task.attr("data-taskid"),
-		date 	= new Date(),
-		staffId = USER_ID,
-		minutes = $task.attr("data-actualminutes") - $task.attr("data-savedTime"),
-		note 	= $task.find("textarea").val();
+	}
 
-	var dd = date.getDate();
-	var mm = date.getMonth()+1; //January is 0!
 
-	var yyyy = date.getFullYear();
-	if (dd<10) { dd = '0' + dd } 
-	if (mm<10) { mm = '0' + mm } 
 
-	date = yyyy + mm + dd;
 
-	var timeSheetData = [
-
-		"<Timesheet>",
-			"<Job>"		+ jobId 	+ "</Job>",
-			"<Task>"	+ taskId 	+ "</Task>",
-			"<Staff>"	+ staffId  	+ "</Staff>",
-			"<Date>"	+ date 		+ "</Date>",
-			"<Minutes>"	+ minutes 	+ "</Minutes>",
-			"<Note>"	+ note 		+ "</Note>",
-		"</Timesheet>"
-
-	].join("");
-
-	$.ajax({ 
-		type: "POST",
-		url: "https://api.workflowmax.com/time.api/add?apiKey="+ API_KEY +"&accountKey="+ ACCOUNT_KEY,
-		data: timeSheetData,
-		dataType: "xml",
-		cache: false,
-		error: function() { console.log("something went wrong"); },
-		success: function(xml) {
-			var $xml = $(xml),
-				minutes = $xml.find("Minutes").text(),
-				taskId = $xml.find("Task").children("ID").text(),
-				$task = $("#task-" + taskId),
-				savedTime = Number($task.attr("data-savedtime")) + Number(minutes);
-
-			$task.attr("data-savedtime", savedTime);
-			console.log("it works");
-			console.log(xml);
-		}
-	});	
+	
 }
