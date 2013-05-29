@@ -2,7 +2,7 @@
 var db = {};
 var tasksDb;
 db.name = "Workflowmax-TasksDb";
-db.version = 39;
+db.version = 40;
 db.objStore = "TasksDb";
 db.indexes = ["TaskName", "TaskDesc", "JobId", "TaskId", "SavedTime", "ActualMinutes", "EstimatedMinutes", "StartDate", "Running", "Syncd"];
 
